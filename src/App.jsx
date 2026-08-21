@@ -32,20 +32,23 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-slate-950">
-            <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+            <header className="flex items-center justify-between border-b border-slate-800 px-4 py-4 sm:px-6">
                 <h1 className="text-sm font-semibold text-slate-100">Pi Wallet Dashboard</h1>
                 <button onClick={logout} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-400">
                     <LogOut size={14} /> Sign out
                 </button>
             </header>
 
-            <div className="mx-auto flex max-w-6xl gap-6 px-6 py-6">
-                <nav className="w-44 shrink-0 space-y-1">
+            <div className="flex flex-col gap-4 px-4 py-4 sm:mx-auto sm:max-w-6xl sm:flex-row sm:gap-6 sm:px-6 sm:py-6">
+                {/* Below sm: a horizontally-scrollable tab strip. At sm+: a fixed vertical sidebar.
+                    The old fixed-width row-flex nav squeezed content into almost nothing on phones -
+                    this is the direct fix for that. */}
+                <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:w-44 sm:shrink-0 sm:flex-col sm:space-y-1 sm:overflow-visible sm:px-0 sm:pb-0">
                     {TABS.map(({ key, label, icon: Icon }) => (
                         <button
                             key={key}
                             onClick={() => setActive(key)}
-                            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                            className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm transition-colors sm:w-full ${
                                 active === key ? 'bg-emerald-500/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
                             }`}
                         >
@@ -54,7 +57,7 @@ export default function App() {
                     ))}
                 </nav>
 
-                <main className="flex-1">
+                <main className="min-w-0 flex-1">
                     <ActiveComponent />
                 </main>
             </div>

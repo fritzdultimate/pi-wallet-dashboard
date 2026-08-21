@@ -84,10 +84,11 @@ export default function Wallets() {
         setCheckingId(id);
         try {
             const res = await api.post(`/wallets/${id}/check-claimable`);
-            const { totalFound, newlyAdded } = res.data;
+            const { totalFound, newlyAdded, totalAmountFound } = res.data;
+            const amountText = totalFound > 0 ? ` totaling ${totalAmountFound.toFixed(4)} Pi` : '';
             setCheckResults((prev) => ({
                 ...prev,
-                [id]: { ok: true, message: `Checked just now: ${totalFound} claimable balance(s) found on-chain (${newlyAdded} new).` },
+                [id]: { ok: true, message: `Checked just now: ${totalFound} claimable balance(s) found on-chain${amountText} (${newlyAdded} new).` },
             }));
         } catch (err) {
             setCheckResults((prev) => ({
@@ -149,14 +150,15 @@ export default function Wallets() {
                     {wallets.length === 0 && <p className="text-sm text-slate-500">No wallets added yet.</p>}
                     {wallets.map((w) => (
                         <div key={w._id} className="rounded-lg border border-slate-800 px-3 py-2.5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-sm font-medium text-slate-200">{w.label}</span>
                                         <Badge tone={w.role === 'main' ? 'neutral' : 'warn'}>{w.role}</Badge>
                                         {w.role === 'main' && (
                                             <Badge tone={w.claimableCount > 0 ? 'good' : 'neutral'}>
                                                 {w.claimableCount || 0} claimable
+                                                {w.claimableCount > 0 ? ` (${w.claimablePiTotal.toFixed(4)} Pi)` : ''}
                                             </Badge>
                                         )}
                                         {w.flagged && (
@@ -165,7 +167,7 @@ export default function Wallets() {
                                             </Badge>
                                         )}
                                     </div>
-                                    <p className="mt-0.5 font-mono text-xs text-slate-500">{w.publicKey}</p>
+                                    <p className="mt-0.5 break-all font-mono text-xs text-slate-500">{w.publicKey}</p>
                                     <p className="mt-0.5 text-xs text-slate-600">
                                         Last checked: {timeAgo(w.lastCheckedAt)}
                                     </p>
@@ -174,7 +176,7 @@ export default function Wallets() {
                                         <p className="mt-1 text-xs text-red-400">Last check error: {w.lastDiscoveryError}</p>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 sm:shrink-0">
                                     <span className="text-sm text-slate-300">{w.lastBalance ?? '—'} Pi</span>
                                     <button onClick={() => refreshBalance(w._id)} className="text-slate-400 hover:text-emerald-400" title="Refresh balance">
                                         <RefreshCw size={16} />
