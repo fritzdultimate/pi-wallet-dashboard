@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle } from '../components/ui/Card.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { Input, Select } from '../components/ui/Input.jsx';
 import { Badge } from '../components/ui/Badge.jsx';
-import { Plus, RefreshCw, Trash2, ShieldAlert } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, ShieldAlert, Search } from 'lucide-react';
 
 const ROLE_LABEL = {
     main: 'Main',
@@ -12,19 +12,35 @@ const ROLE_LABEL = {
     reserve: 'Reserve (pre-funds funders)',
 };
 
+function timeAgo(dateStr) {
+    if (!dateStr) return 'never';
+    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+}
+
 export default function Wallets() {
     const { api } = useAuth();
     const [wallets, setWallets] = useState([]);
+    const [destinationAddress, setDestinationAddress] = useState(undefined); // undefined = not loaded yet
     const [label, setLabel] = useState('');
     const [role, setRole] = useState('main');
     const [credentialType, setCredentialType] = useState('mnemonic');
     const [credential, setCredential] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [checkingId, setCheckingId] = useState(null);
+    const [checkResults, setCheckResults] = useState({}); // walletId -> { ok, message }
 
     async function load() {
-        const res = await api.get('/wallets');
-        setWallets(res.data);
+        const [walletsRes, settingsRes] = await Promise.all([
+            api.get('/wallets'),
+            api.get('/settings'),
+        ]);
+        setWallets(walletsRes.data);
+        setDestinationAddress(settingsRes.data.destinationAddress || '');
     }
 
     useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -42,7 +58,12 @@ export default function Wallets() {
             setCredential('');
             await load();
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to add wallet');
+            // Show BOTH the human-readable reason and the underlying detail - previously
+            // only the generic top-level message was shown, which hid why a secret key
+            // was actually being rejected.
+            const data = err.response?.data;
+            const message = [data?.error, data?.detail].filter(Boolean).join(' - ');
+            setError(message || 'Failed to add wallet');
         } finally {
             setBusy(false);
         }
@@ -59,8 +80,35 @@ export default function Wallets() {
         await load();
     }
 
+    async function checkClaimable(id) {
+        setCheckingId(id);
+        try {
+            const res = await api.post(`/wallets/${id}/check-claimable`);
+            const { totalFound, newlyAdded } = res.data;
+            setCheckResults((prev) => ({
+                ...prev,
+                [id]: { ok: true, message: `Checked just now: ${totalFound} claimable balance(s) found on-chain (${newlyAdded} new).` },
+            }));
+        } catch (err) {
+            setCheckResults((prev) => ({
+                ...prev,
+                [id]: { ok: false, message: err.response?.data?.error || 'Check failed' },
+            }));
+        } finally {
+            setCheckingId(null);
+            await load();
+        }
+    }
+
     return (
         <div className="space-y-6">
+            {destinationAddress === '' && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                    No destination address is set in Settings. Claimable-balance discovery is disabled for every
+                    wallet until you set one - that's why wallets may show only a balance with nothing found.
+                </div>
+            )}
+
             <Card>
                 <CardHeader>
                     <CardTitle>Add a wallet you hold the keys to</CardTitle>
@@ -77,7 +125,7 @@ export default function Wallets() {
                         <option value="secret">Secret key (S...)</option>
                     </Select>
                     <Input
-                        placeholder={credentialType === 'secret' ? 'Secret key (starts with S)' : '24-word recovery phrase'}
+                        placeholder={credentialType === 'secret' ? 'Secret key (56 chars, starts with S)' : '24-word recovery phrase'}
                         value={credential}
                         onChange={(e) => setCredential(e.target.value)}
                         required
@@ -89,6 +137,7 @@ export default function Wallets() {
                 {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
                 <p className="mt-3 text-xs text-slate-500">
                     Stored encrypted at rest. Never transmitted anywhere except to this server, over your own connection.
+                    Adding a "Main" wallet checks for claimable balances immediately.
                 </p>
             </Card>
 
@@ -99,29 +148,57 @@ export default function Wallets() {
                 <div className="space-y-2">
                     {wallets.length === 0 && <p className="text-sm text-slate-500">No wallets added yet.</p>}
                     {wallets.map((w) => (
-                        <div key={w._id} className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2.5">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-slate-200">{w.label}</span>
-                                    <Badge tone={w.role === 'main' ? 'neutral' : 'warn'}>{w.role}</Badge>
-                                    {w.flagged && (
-                                        <Badge tone="bad" className="gap-1">
-                                            <ShieldAlert size={12} /> flagged
-                                        </Badge>
+                        <div key={w._id} className="rounded-lg border border-slate-800 px-3 py-2.5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-slate-200">{w.label}</span>
+                                        <Badge tone={w.role === 'main' ? 'neutral' : 'warn'}>{w.role}</Badge>
+                                        {w.role === 'main' && (
+                                            <Badge tone={w.claimableCount > 0 ? 'good' : 'neutral'}>
+                                                {w.claimableCount || 0} claimable
+                                            </Badge>
+                                        )}
+                                        {w.flagged && (
+                                            <Badge tone="bad" className="gap-1">
+                                                <ShieldAlert size={12} /> flagged
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <p className="mt-0.5 font-mono text-xs text-slate-500">{w.publicKey}</p>
+                                    <p className="mt-0.5 text-xs text-slate-600">
+                                        Last checked: {timeAgo(w.lastCheckedAt)}
+                                    </p>
+                                    {w.flagged && <p className="mt-1 text-xs text-red-400">{w.flagReason}</p>}
+                                    {w.lastDiscoveryError && (
+                                        <p className="mt-1 text-xs text-red-400">Last check error: {w.lastDiscoveryError}</p>
                                     )}
                                 </div>
-                                <p className="mt-0.5 font-mono text-xs text-slate-500">{w.publicKey}</p>
-                                {w.flagged && <p className="mt-1 text-xs text-red-400">{w.flagReason}</p>}
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-slate-300">{w.lastBalance ?? '—'} Pi</span>
+                                    <button onClick={() => refreshBalance(w._id)} className="text-slate-400 hover:text-emerald-400" title="Refresh balance">
+                                        <RefreshCw size={16} />
+                                    </button>
+                                    {w.role === 'main' && (
+                                        <button
+                                            onClick={() => checkClaimable(w._id)}
+                                            disabled={checkingId === w._id}
+                                            className="text-slate-400 hover:text-emerald-400 disabled:opacity-40"
+                                            title="Check for claimable balances now"
+                                        >
+                                            <Search size={16} />
+                                        </button>
+                                    )}
+                                    <button onClick={() => removeWallet(w._id)} className="text-slate-400 hover:text-red-400" title="Remove">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm text-slate-300">{w.lastBalance ?? '—'} Pi</span>
-                                <button onClick={() => refreshBalance(w._id)} className="text-slate-400 hover:text-emerald-400" title="Refresh balance">
-                                    <RefreshCw size={16} />
-                                </button>
-                                <button onClick={() => removeWallet(w._id)} className="text-slate-400 hover:text-red-400" title="Remove">
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
+                            {checkResults[w._id] && (
+                                <p className={`mt-2 text-xs ${checkResults[w._id].ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {checkResults[w._id].message}
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
