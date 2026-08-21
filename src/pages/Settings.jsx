@@ -91,6 +91,90 @@ export default function SettingsPage() {
                         onChange={(e) => setSettings({ ...settings, pollIntervalMs: Number(e.target.value) })}
                     />
                 </div>
+                <div>
+                    <label className="mb-1 block text-xs text-slate-400">Max concurrent claims (1–50)</label>
+                    <Input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={settings.maxConcurrentClaims}
+                        onChange={(e) => setSettings({ ...settings, maxConcurrentClaims: Number(e.target.value) })}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                        How many different due claims process at once. Claims sharing a funder wallet are
+                        still queued behind each other automatically - only claims on different funders run
+                        truly in parallel.
+                    </p>
+                </div>
+
+                <hr className="border-slate-800" />
+
+                <div className="flex items-center justify-between">
+                    <label className="text-xs text-slate-400">Pre-fund sponsors ahead of time</label>
+                    <input
+                        type="checkbox"
+                        checked={!!settings.funderPrefundEnabled}
+                        onChange={(e) => setSettings({ ...settings, funderPrefundEnabled: e.target.checked })}
+                    />
+                </div>
+                {settings.funderPrefundEnabled && (
+                    <div>
+                        <label className="mb-1 block text-xs text-slate-400">Lead time before claim (minutes)</label>
+                        <Input
+                            type="number"
+                            step="1"
+                            value={settings.funderLeadTimeMinutes}
+                            onChange={(e) => setSettings({ ...settings, funderLeadTimeMinutes: Number(e.target.value) })}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">
+                            Requires at least one wallet tagged role "Reserve" on the Wallets page - it pays
+                            for the top-ups.
+                        </p>
+                    </div>
+                )}
+
+                <hr className="border-slate-800" />
+
+                <div className="flex items-center justify-between">
+                    <label className="text-xs text-slate-400">Continuous sweep to destination</label>
+                    <input
+                        type="checkbox"
+                        checked={!!settings.sweepEnabled}
+                        onChange={(e) => setSettings({ ...settings, sweepEnabled: e.target.checked })}
+                    />
+                </div>
+                {settings.sweepEnabled && (
+                    <>
+                        <div>
+                            <label className="mb-1 block text-xs text-slate-400">Sweep interval (ms)</label>
+                            <Input
+                                type="number"
+                                step="1000"
+                                value={settings.sweepIntervalMs}
+                                onChange={(e) => setSettings({ ...settings, sweepIntervalMs: Number(e.target.value) })}
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs text-slate-400">Wallets per sweep batch</label>
+                            <Input
+                                type="number"
+                                step="1"
+                                value={settings.sweepBatchSize}
+                                onChange={(e) => setSettings({ ...settings, sweepBatchSize: Number(e.target.value) })}
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs text-slate-400">Leave behind per wallet (Pi)</label>
+                            <Input
+                                type="number"
+                                step="0.1"
+                                value={settings.sweepReserveMinimum}
+                                onChange={(e) => setSettings({ ...settings, sweepReserveMinimum: Number(e.target.value) })}
+                            />
+                        </div>
+                    </>
+                )}
+
                 <Button type="submit" className="w-full">Save</Button>
                 {saved && <p className="text-sm text-emerald-400">Saved.</p>}
             </form>

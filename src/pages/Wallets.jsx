@@ -6,12 +6,19 @@ import { Input, Select } from '../components/ui/Input.jsx';
 import { Badge } from '../components/ui/Badge.jsx';
 import { Plus, RefreshCw, Trash2, ShieldAlert } from 'lucide-react';
 
+const ROLE_LABEL = {
+    main: 'Main',
+    funder: 'Funder (pays fees)',
+    reserve: 'Reserve (pre-funds funders)',
+};
+
 export default function Wallets() {
     const { api } = useAuth();
     const [wallets, setWallets] = useState([]);
     const [label, setLabel] = useState('');
     const [role, setRole] = useState('main');
-    const [mnemonic, setMnemonic] = useState('');
+    const [credentialType, setCredentialType] = useState('mnemonic');
+    const [credential, setCredential] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
@@ -27,9 +34,12 @@ export default function Wallets() {
         setError('');
         setBusy(true);
         try {
-            await api.post('/wallets', { label, role, mnemonic });
+            const body = credentialType === 'secret'
+                ? { label, role, secretKey: credential, credentialType: 'secret' }
+                : { label, role, mnemonic: credential, credentialType: 'mnemonic' };
+            await api.post('/wallets', body);
             setLabel('');
-            setMnemonic('');
+            setCredential('');
             await load();
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to add wallet');
@@ -58,14 +68,18 @@ export default function Wallets() {
                 <form onSubmit={addWallet} className="grid gap-3 sm:grid-cols-4">
                     <Input placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} required />
                     <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                        <option value="main">Main</option>
-                        <option value="funder">Funder (pays fees)</option>
+                        {Object.entries(ROLE_LABEL).map(([value, text]) => (
+                            <option key={value} value={value}>{text}</option>
+                        ))}
+                    </Select>
+                    <Select value={credentialType} onChange={(e) => setCredentialType(e.target.value)}>
+                        <option value="mnemonic">24-word phrase</option>
+                        <option value="secret">Secret key (S...)</option>
                     </Select>
                     <Input
-                        className="sm:col-span-2"
-                        placeholder="24-word recovery phrase"
-                        value={mnemonic}
-                        onChange={(e) => setMnemonic(e.target.value)}
+                        placeholder={credentialType === 'secret' ? 'Secret key (starts with S)' : '24-word recovery phrase'}
+                        value={credential}
+                        onChange={(e) => setCredential(e.target.value)}
                         required
                     />
                     <Button type="submit" disabled={busy} className="sm:col-span-4">
@@ -89,7 +103,7 @@ export default function Wallets() {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-slate-200">{w.label}</span>
-                                    <Badge tone={w.role === 'funder' ? 'warn' : 'neutral'}>{w.role}</Badge>
+                                    <Badge tone={w.role === 'main' ? 'neutral' : 'warn'}>{w.role}</Badge>
                                     {w.flagged && (
                                         <Badge tone="bad" className="gap-1">
                                             <ShieldAlert size={12} /> flagged
